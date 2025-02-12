@@ -16,10 +16,11 @@ class CameraController:
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
                 
-            filename = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
-            filepath = os.path.join(save_dir, filename)
+            # h264 파일로 먼저 저장
+            filename = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}.h264"
+            self.filepath = os.path.join(save_dir, filename)
             
-            # 녹화 시작 (타임아웃 없이)
+            # 녹화 시작
             cmd = [
                 'libcamera-vid',
                 '--width', '3840',
@@ -30,27 +31,35 @@ class CameraController:
                 '--contrast', '1.2',    
                 '--framerate', '15',    
                 '--codec', 'h264',
-                '--output', filepath,
+                '--output', self.filepath,
                 '--quiet',
                 '-n'
             ]
             
             self.process = subprocess.Popen(cmd, stderr=subprocess.DEVNULL)
             self.recording = True
-            print(f"녹화 시작: {filepath}")
-            return filepath
+            print(f"녹화 시작: {self.filepath}")
+            return self.filepath
             
         except Exception as e:
             print(f"녹화 시작 중 오류: {e}")
             return None
             
     def stop_recording(self):
-        """녹화 정지"""
+        """녹화 정지 및 MP4 변환"""
         if self.recording and self.process:
             self.process.terminate()
             self.process.wait()
             self.recording = False
-            print("녹화 종료")
+            
+            # h264를 MP4로 변환
+            mp4_filepath = self.filepath.replace('.h264', '.mp4')
+            subprocess.run(['ffmpeg', '-i', self.filepath, '-c', 'copy', mp4_filepath, '-y'], stderr=subprocess.DEVNULL)
+            
+            # h264 파일 삭제
+            os.remove(self.filepath)
+            
+            print(f"녹화 종료 및 변환 완료: {mp4_filepath}")
 
 if __name__ == "__main__":
     camera = CameraController()
@@ -58,7 +67,7 @@ if __name__ == "__main__":
         print("녹화를 시작합니다. 종료하려면 Ctrl+C를 누르세요.")
         camera.start_recording()
         while True:
-            time.sleep(1)  # CPU 사용량을 줄이기 위한 대기
+            time.sleep(1)
             
     except KeyboardInterrupt:
         print("\n녹화를 종료합니다.")
