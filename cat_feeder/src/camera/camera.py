@@ -7,24 +7,20 @@ import time
 class CameraController:
     def __init__(self):
         self.recording = False
+        self.process = None
         
-    def record_segment(self, duration=5) -> str:
-        """한 세그먼트 녹화"""
+    def start_recording(self) -> str:
+        """연속 녹화 시작"""
         try:
             save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'videos')
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
                 
-            # 임시 h264 파일
-            temp_filename = f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}.h264"
-            temp_filepath = os.path.join(save_dir, temp_filename)
+            filename = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
+            filepath = os.path.join(save_dir, filename)
             
-            # 최종 MP4 파일
-            final_filename = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
-            final_filepath = os.path.join(save_dir, final_filename)
-            
-            # 녹화
-            subprocess.run([
+            # 녹화 시작 (타임아웃 없이)
+            cmd = [
                 'libcamera-vid',
                 '--width', '3840',
                 '--height', '2160',
@@ -34,34 +30,36 @@ class CameraController:
                 '--contrast', '1.2',    
                 '--framerate', '15',    
                 '--codec', 'h264',
-                '--timeout', str(duration * 1000),
-                '--output', temp_filepath,
-                '--quiet'
-            ])
+                '--output', filepath,
+                '--quiet',
+                '-n'
+            ]
             
-            # h264를 MP4로 변환
-            subprocess.run(['ffmpeg', '-i', temp_filepath, '-c', 'copy', final_filepath, '-y', '-loglevel', 'quiet'])
-            
-            # 임시 파일 삭제
-            os.remove(temp_filepath)
-            
-            print(f"세그먼트 녹화 완료: {final_filename}")
-            return final_filepath
+            self.process = subprocess.Popen(cmd, stderr=subprocess.DEVNULL)
+            self.recording = True
+            print(f"녹화 시작: {filepath}")
+            return filepath
             
         except Exception as e:
-            print(f"녹화 중 오류: {e}")
+            print(f"녹화 시작 중 오류: {e}")
             return None
-
-    def continuous_recording(self):
-        """무한 분할 녹화"""
-        try:
-            print("연속 녹화를 시작합니다. 중지하려면 Ctrl+C를 누르세요.")
-            while True:
-                self.record_segment()
-                
-        except KeyboardInterrupt:
-            print("\n녹화를 종료합니다.")
+            
+    def stop_recording(self):
+        """녹화 정지"""
+        if self.recording and self.process:
+            self.process.terminate()
+            self.process.wait()
+            self.recording = False
+            print("녹화 종료")
 
 if __name__ == "__main__":
     camera = CameraController()
-    camera.continuous_recording()
+    try:
+        print("녹화를 시작합니다. 종료하려면 Ctrl+C를 누르세요.")
+        camera.start_recording()
+        while True:
+            time.sleep(1)  # CPU 사용량을 줄이기 위한 대기
+            
+    except KeyboardInterrupt:
+        print("\n녹화를 종료합니다.")
+        camera.stop_recording()
