@@ -9,8 +9,8 @@ class CameraController:
         self.recording = False
         self.filepath = None
         
-    def start_recording(self) -> str:
-        """연속 녹화 시작"""
+    def start_preview_and_recording(self) -> str:
+        """프리뷰 시작 및 연속 녹화 시작"""
         try:
             # 저장 디렉토리 생성
             save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'videos')
@@ -26,6 +26,12 @@ class CameraController:
             self.camera.resolution = (1920, 1080)
             self.camera.framerate = 30
             
+            # 프리뷰 시작 (전체화면)
+            self.camera.start_preview(fullscreen=True)
+            
+            # 2초 대기하여 카메라가 밝기를 조정할 시간을 줌
+            time.sleep(2)
+            
             # 녹화 시작
             self.camera.start_recording(self.filepath)
             self.recording = True
@@ -34,13 +40,16 @@ class CameraController:
             
         except Exception as e:
             print(f"녹화 시작 중 오류: {e}")
+            if self.camera:
+                self.camera.close()
             return None
             
-    def stop_recording(self):
-        """녹화 정지"""
+    def stop_preview_and_recording(self):
+        """프리뷰 및 녹화 정지"""
         if self.recording and self.camera:
             try:
                 self.camera.stop_recording()
+                self.camera.stop_preview()
                 self.camera.close()
                 print(f"녹화 종료: {self.filepath}")
             except Exception as e:
@@ -52,13 +61,13 @@ class CameraController:
     def __del__(self):
         """소멸자: 인스턴스 삭제 시 녹화 중지"""
         if self.recording:
-            self.stop_recording()
+            self.stop_preview_and_recording()
 
 if __name__ == "__main__":
     camera = CameraController()
     try:
         print("녹화를 시작합니다. 종료하려면 Ctrl+C를 누르세요.")
-        camera.start_recording()
+        camera.start_preview_and_recording()
         
         # 메인 루프
         while True:
@@ -66,8 +75,8 @@ if __name__ == "__main__":
             
     except KeyboardInterrupt:
         print("\n녹화를 종료합니다.")
-        camera.stop_recording()
+        camera.stop_preview_and_recording()
     except Exception as e:
         print(f"예상치 못한 오류: {e}")
         if camera.recording:
-            camera.stop_recording()
+            camera.stop_preview_and_recording()
