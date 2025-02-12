@@ -1,89 +1,56 @@
 # src/camera/camera.py
-
-from picamera2 import Picamera2
-import time
-from datetime import datetime
 import os
-from config.settings import CAMERA_SETTINGS
+import subprocess
+from datetime import datetime
 
 class CameraController:
-    def __init__(self):
-        self.camera = Picamera2()
-        # 카메라 기본 설정
-        self.configure_camera()
-        
-    def configure_camera(self):
-        """카메라 초기 설정"""
-        # 카메라 설정
-        config = self.camera.create_still_configuration(
-            main={"size": (1920, 1080)},
-            lores={"size": (640, 480)},
-            display="lores"
-        )
-        self.camera.configure(config)
-        
-        # ISO 설정
-        if hasattr(self.camera, 'set_controls'):
-            self.camera.set_controls({"AnalogueGain": CAMERA_SETTINGS['ISO']})
-            
-    def start(self):
-        """카메라 시작"""
-        self.camera.start()
-        # 카메라 안정화를 위한 대기
-        time.sleep(2)
-        
-    def stop(self):
-        """카메라 정지"""
-        self.camera.stop()
-        
-    def capture_image(self) -> str:
-        """사진 촬영 및 저장
-        
-        Returns:
-            str: 저장된 이미지 파일 경로
-        """
-        try:
-            # 이미지 저장 경로 설정
-            save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'images')
-            
-            # 저장 폴더가 없다면 생성
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-                
-            # 파일명 생성 (timestamp 사용)
-            filename = f"capture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-            filepath = os.path.join(save_dir, filename)
-            
-            # 사진 촬영
-            self.camera.capture_file(filepath)
-            print(f"이미지 저장됨: {filepath}")
-            
-            return filepath
-            
-        except Exception as e:
-            print(f"이미지 촬영 중 오류 발생: {e}")
-            return None
+   def __init__(self):
+       pass
+       
+   def start_preview(self):
+       """libcamera로 프리뷰 시작"""
+       try:
+           # libcamera-hello로 프리뷰
+           subprocess.run(['libcamera-hello', '-t', '0'])
+       except Exception as e:
+           print(f"프리뷰 시작 중 오류: {e}")
+           
+   def capture_image(self) -> str:
+       """사진 촬영"""
+       try:
+           # 저장 경로 설정
+           save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'images')
+           if not os.path.exists(save_dir):
+               os.makedirs(save_dir)
+               
+           filename = f"capture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+           filepath = os.path.join(save_dir, filename)
+           
+           # libcamera-still로 4K 해상도 촬영
+           subprocess.run([
+               'libcamera-still',
+               '--width', '3840',
+               '--height', '2160',
+               '--ev', '1',           # 노출 보정
+               '--gain', '2',         # 게인
+               '--brightness', '0.5',  # 밝기
+               '--contrast', '1.2',    # 대비
+               '--sharpness', '1.5',   # 선명도
+               '-o', filepath
+           ])
+           
+           print(f"이미지 저장됨: {filepath}")
+           return filepath
+           
+       except Exception as e:
+           print(f"촬영 중 오류: {e}")
+           return None
 
-# 테스트 코드
 if __name__ == "__main__":
-    try:
-        camera = CameraController()
-        print("카메라 초기화 완료")
-        
-        camera.start()
-        print("카메라 시작됨")
-        
-        # 테스트 촬영
-        input("Enter를 누르면 사진을 촬영합니다...")
-        filepath = camera.capture_image()
-        
-        if filepath:
-            print(f"이미지가 성공적으로 저장되었습니다: {filepath}")
-        
-    except Exception as e:
-        print(f"오류 발생: {e}")
-    
-    finally:
-        if 'camera' in locals():
-            camera.stop()
-            print("카메라 종료")
+   camera = CameraController()
+   try:
+       print("프리뷰를 시작합니다...")
+       camera.start_preview()
+       
+   except KeyboardInterrupt:
+       print("\n프리뷰를 종료합니다.")
