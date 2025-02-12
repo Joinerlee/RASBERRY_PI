@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 import RPi.GPIO as GPIO
 import sys
-sys.path.append('..')  # src 폴더로 가기 위해
+sys.path.append('../..')  # src 상위 폴더로 가기 위해
 from config.settings import MOTOR_PINS, MOTOR_SPEED, MOTOR_RUNTIME, FEEDING_TIMES
 
 class FeederMotor:
