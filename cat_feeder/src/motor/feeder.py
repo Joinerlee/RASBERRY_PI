@@ -1,23 +1,17 @@
+# src/motor/feeder.py
 
 import time
 from datetime import datetime
 import RPi.GPIO as GPIO
-import sys
-sys.path.append('../..')  # src 상위 폴더로 가기 위해
+import json
+import os
 from config.settings import MOTOR_PINS, MOTOR_SPEED, MOTOR_RUNTIME, FEEDING_TIMES
 
 class FeederMotor:
     def __init__(self):
-        # 환경변수에서 GPIO 핀 설정 가져오기
         self.in1 = MOTOR_PINS['IN1']
         self.in2 = MOTOR_PINS['IN2']
         self.ena = MOTOR_PINS['ENA']
-        
-        # 환경변수에서 모터 설정 가져오기
-        self.speed = MOTOR_SPEED
-        self.runtime = MOTOR_RUNTIME
-        
-        # GPIO 초기 설정
         self.setup_gpio()
         
     def setup_gpio(self):
@@ -37,30 +31,66 @@ class FeederMotor:
             feeding_time = datetime.now()
             
             # 모터 작동
-            self.pwm.ChangeDutyCycle(self.speed)  # 설정된 속도로 작동
+            self.pwm.ChangeDutyCycle(MOTOR_SPEED)
             GPIO.output(self.in1, GPIO.HIGH)
             GPIO.output(self.in2, GPIO.LOW)
             
             # 설정된 시간동안 작동
-            time.sleep(self.runtime)
+            time.sleep(MOTOR_RUNTIME)
             
             # 모터 정지
             self.pwm.ChangeDutyCycle(0)
             GPIO.output(self.in1, GPIO.LOW)
             GPIO.output(self.in2, GPIO.LOW)
             
-            return {
+            result = {
                 "success": True,
                 "timestamp": feeding_time.isoformat(),
-                "motor_runtime": self.runtime
+                "motor_runtime": MOTOR_RUNTIME
             }
             
+            # 결과 저장
+            self.save_result(result)
+            
+            return result
+            
         except Exception as e:
-            return {
+            error_result = {
                 "success": False,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+            self.save_result(error_result)
+            return error_result
+    
+    def save_result(self, result: dict):
+        """급식 결과를 JSON 파일로 저장"""
+        # logs 폴더 경로
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
+        
+        # logs 폴더가 없다면 생성
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        # 오늘 날짜로 파일명 생성
+        filename = os.path.join(log_dir, f"{datetime.now().strftime('%Y-%m-%d')}_feeding_log.json")
+        
+        # 기존 로그 읽기
+        if os.path.exists(filename):
+            try:
+                with open(filename, 'r') as f:
+                    logs = json.load(f)
+            except json.JSONDecodeError:
+                logs = []
+        else:
+            logs = []
+        
+        # 새로운 결과 추가
+        logs.append(result)
+        
+        # 저장
+        with open(filename, 'w') as f:
+            json.dump(logs, f, indent=2)
     
     def cleanup(self):
         """GPIO 설정 초기화"""
@@ -68,27 +98,6 @@ class FeederMotor:
         GPIO.cleanup([self.in1, self.in2, self.ena])
 
 
-class FeedingScheduler:
-    def __init__(self):
-        self.feeder = FeederMotor()
-        self.feeding_times = FEEDING_TIMES
-        
-    def should_feed(self) -> bool:
-        """현재 시간이 급식 시간인지 확인"""
-        current_time = datetime.now().strftime("%H:%M")
-        return current_time in self.feeding_times
-        
-    def run_scheduled_feeding(self):
-        """정해진 시간에 급식 실행"""
-        if self.should_feed():
-            return self.feeder.feed()
-        return None
-        
-    def cleanup(self):
-        self.feeder.cleanup()
-
-
-# 테스트 코드
 if __name__ == "__main__":
     try:
         feeder = FeederMotor()
@@ -97,6 +106,6 @@ if __name__ == "__main__":
         
     except KeyboardInterrupt:
         print("\n프로그램을 종료합니다.")
-    
     finally:
-        feeder.cleanup()
+        if 'feeder' in locals():
+            feeder.cleanup()
